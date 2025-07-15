@@ -24,10 +24,13 @@ var (
 )
 
 type stat struct {
-	n         string
+	// n Name
+	n string
+	// d Description
 	d         string
 	dimension string
 	variants  []string
+	valType   prometheus.ValueType
 	desc      *prometheus.Desc
 }
 
@@ -37,40 +40,40 @@ var (
 
 var vdevStats = []stat{
 	{}, // Skip timestamp
-	{n: "state", d: "state (see pool_state_t)"},
+	{n: "state", d: "state (see pool_state_t)", valType: prometheus.GaugeValue},
 	{}, // Skip auxiliary pool state as it is only relevant for non-imported pools
-	{n: "space_allocated_bytes", d: "allocated space in bytes"},
-	{n: "space_capacity_bytes", d: "total capacity in bytes"},
-	{n: "space_deflated_capacity_bytes", d: "deflated capacity in bytes"},
-	{n: "devsize_replaceable", d: "replaceable device size"},
-	{n: "devsize_expandable", d: "expandable device size"},
-	{n: "ops", d: "I/O operations", dimension: "type", variants: zioNames},
-	{n: "bytes", d: "bytes processed", dimension: "type", variants: zioNames},
-	{n: "errors", d: "errors encountered", dimension: "type", variants: []string{"read", "write", "checksum", "initialize"}},
-	{n: "self_healed_bytes", d: "bytes self-healed"},
+	{n: "space_allocated_bytes", d: "allocated space in bytes", valType: prometheus.GaugeValue},
+	{n: "space_capacity_bytes", d: "total capacity in bytes", valType: prometheus.GaugeValue},
+	{n: "space_deflated_capacity_bytes", d: "deflated capacity in bytes", valType: prometheus.GaugeValue},
+	{n: "devsize_replaceable", d: "replaceable device size", valType: prometheus.GaugeValue},
+	{n: "devsize_expandable", d: "expandable device size", valType: prometheus.GaugeValue},
+	{n: "ops", d: "I/O operations", dimension: "type", variants: zioNames, valType: prometheus.CounterValue},
+	{n: "bytes", d: "bytes processed", dimension: "type", variants: zioNames, valType: prometheus.CounterValue},
+	{n: "errors", d: "errors encountered", dimension: "type", variants: []string{"read", "write", "checksum", "initialize"}, valType: prometheus.CounterValue},
+	{n: "self_healed_bytes", d: "bytes self-healed", valType: prometheus.CounterValue},
 	{}, // Skip weird removed stat
-	{n: "scan_processed_bytes", d: "bytes scanned"},
-	{n: "fragmentation", d: "fragmentation"},
-	{n: "initialize_processed_bytes", d: "bytes already initialized"},
-	{n: "initialize_estimated_bytes", d: "estimated total number of bytes to initialize"},
-	{n: "initialize_state", d: "initialize state (see initialize_state_t)"}, // TODO: fix
-	{n: "initialize_action_time", d: "initialize time"},
-	{n: "checkpoint_space_bytes", d: "checkpoint space in bytes"},
-	{n: "resilver_deferred", d: "resilver deferred"},
-	{n: "slow_ios", d: "slow I/O operations (30 seconds or more to complete)"},
-	{n: "trim_errors", d: "trim errors"},
-	{n: "trim_unsupported", d: "doesn't support TRIM"},
-	{n: "trim_processed_bytes", d: "TRIMmed bytes"},
-	{n: "trim_estimated_bytes", d: "estimated bytes to TRIM"},
-	{n: "trim_state", d: "trim state"},
-	{n: "trim_action_time", d: "trim time"},
-	{n: "rebuild_processed_bytes", d: "bytes already rebuilt"},
-	{n: "ashift_configured", d: "configured ashift"},
-	{n: "ashift_logical", d: "logical ashift"},
-	{n: "ashfit_physical", d: "physical ashift"},
+	{n: "scan_processed_bytes", d: "bytes scanned", valType: prometheus.CounterValue},
+	{n: "fragmentation", d: "fragmentation", valType: prometheus.GaugeValue},
+	{n: "initialize_processed_bytes", d: "bytes already initialized", valType: prometheus.CounterValue},
+	{n: "initialize_estimated_bytes", d: "estimated total number of bytes to initialize", valType: prometheus.GaugeValue},
+	{n: "initialize_state", d: "initialize state (see initialize_state_t)", valType: prometheus.GaugeValue}, // TODO: fix
+	{n: "initialize_action_time", d: "initialize time", valType: prometheus.GaugeValue},
+	{n: "checkpoint_space_bytes", d: "checkpoint space in bytes", valType: prometheus.GaugeValue},
+	{n: "resilver_deferred", d: "resilver deferred", valType: prometheus.GaugeValue},
+	{n: "slow_ios", d: "slow I/O operations (30 seconds or more to complete)", valType: prometheus.CounterValue},
+	{n: "trim_errors", d: "trim errors", valType: prometheus.CounterValue},
+	{n: "trim_unsupported", d: "doesn't support TRIM", valType: prometheus.GaugeValue},
+	{n: "trim_processed_bytes", d: "TRIMmed bytes", valType: prometheus.CounterValue},
+	{n: "trim_estimated_bytes", d: "estimated bytes to TRIM", valType: prometheus.GaugeValue},
+	{n: "trim_state", d: "trim state", valType: prometheus.GaugeValue},
+	{n: "trim_action_time", d: "trim time", valType: prometheus.GaugeValue},
+	{n: "rebuild_processed_bytes", d: "bytes already rebuilt", valType: prometheus.CounterValue},
+	{n: "ashift_configured", d: "configured ashift", valType: prometheus.GaugeValue},
+	{n: "ashift_logical", d: "logical ashift", valType: prometheus.GaugeValue},
+	{n: "ashfit_physical", d: "physical ashift", valType: prometheus.GaugeValue},
 	// Added in 2021 and 2022.
-	{n: "noalloc_status", d: "allocations halted?"},
-	{n: "physical_capacity_bytes", d: "physical capacity"},
+	{n: "noalloc_status", d: "allocations halted?", valType: prometheus.GaugeValue},
+	{n: "physical_capacity_bytes", d: "physical capacity", valType: prometheus.GaugeValue},
 }
 
 // <cks>: this is struct pool_scan_stat.
@@ -114,6 +117,7 @@ var (
 	poolLoadTime       = prometheus.NewDesc("zfs_pool_load_time_seconds", "The time when the pool was imported (often at system boot)", []string{"zpool", "guid"}, nil)
 	poolErrors         = prometheus.NewDesc("zfs_pool_errors", "ZFS pool error count", []string{"zpool", "guid"}, nil)
 	poolChildren       = prometheus.NewDesc("zfs_pool_vdevs", "ZFS pool top level vdev count", []string{"zpool", "guid"}, nil)
+	poolFragmentation  = prometheus.NewDesc("zfs_pool_fragmentation", "Average fragmentation across all vdevs in the pool", []string{"zpool"}, nil)
 	vdevChildren       = prometheus.NewDesc("zfs_vdev_children", "Count of children of a vdev", []string{"vdev", "zpool"}, nil)
 	vdevNparity        = prometheus.NewDesc("zfs_vdev_nparity", "The parity level of a vdev (not always defined)", []string{"vdev", "pool"}, nil)
 
@@ -223,6 +227,7 @@ func (c *zfsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- poolLoadTime
 	ch <- poolErrors
 	ch <- poolChildren
+	ch <- poolFragmentation
 	ch <- vdevChildren
 	ch <- vdevNparity
 	ch <- poolConfigTxg
@@ -327,12 +332,18 @@ func reportVdevStats(poolName, vdevName string, vdev map[string]interface{}, ch 
 			i++
 			continue
 		}
+
+		valType := s.valType
+		if valType == 0 {
+			valType = prometheus.UntypedValue
+		}
+
 		if len(s.variants) == 0 {
-			ch <- prometheus.MustNewConstMetric(s.desc, prometheus.UntypedValue, float64(rawStats[i]), vdevName, poolName, path)
+			ch <- prometheus.MustNewConstMetric(s.desc, valType, float64(rawStats[i]), vdevName, poolName, path)
 			i++
 		} else {
 			for _, v := range s.variants {
-				ch <- prometheus.MustNewConstMetric(s.desc, prometheus.UntypedValue, float64(rawStats[i]), vdevName, poolName, path, v)
+				ch <- prometheus.MustNewConstMetric(s.desc, valType, float64(rawStats[i]), vdevName, poolName, path, v)
 				i++
 			}
 		}
@@ -436,6 +447,34 @@ func (c *zfsCollector) Collect(ch chan<- prometheus.Metric) {
 				// We know for sure that these are all gauges.
 				ch <- prometheus.MustNewConstMetric(s.desc, prometheus.GaugeValue, float64(rawStats[i]), poolName)
 			}
+		}
+
+		// Calculate average fragmentation for the pool
+		var totalFragmentation float64
+		var vdevCount int
+
+		// Helper function to collect fragmentation from vdevs
+		var collectFragmentation func(vdev map[string]interface{})
+		collectFragmentation = func(vdev map[string]interface{}) {
+			if rawStats, ok := vdev["vdev_stats"].([]uint64); ok && len(rawStats) > 14 {
+				fragmentation := rawStats[14] // Index 14 is fragmentation
+				if fragmentation > 0 {
+					totalFragmentation += float64(fragmentation)
+					vdevCount++
+				}
+			}
+			if children, ok := vdev["children"].([]map[string]interface{}); ok {
+				for _, child := range children {
+					collectFragmentation(child)
+				}
+			}
+		}
+
+		collectFragmentation(vdevTree)
+
+		if vdevCount > 0 {
+			avgFragmentation := totalFragmentation / float64(vdevCount)
+			ch <- prometheus.MustNewConstMetric(poolFragmentation, prometheus.GaugeValue, avgFragmentation, poolName)
 		}
 	}
 }
